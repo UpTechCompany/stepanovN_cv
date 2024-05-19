@@ -4,77 +4,93 @@ import numpy as np
 from time import sleep, time
 import pyautogui as inp
 
-# Чтение и преобразование изображения динозавра
-dino_img = cv.imread("t-rex.png")
-dino_img = cv.cvtColor(dino_img, cv.COLOR_RGB2GRAY)
+# Загрузка и подготовка изображения динозавра
+dino_img = cv.imread("t-rex.png", cv.IMREAD_GRAYSCALE)
 sleep(3)
 
 # Параметры захвата экрана
 frame_rate = 60
 frame_duration = 1.0 / frame_rate
 
-with mss() as sct:
-    monitor = {"top": 303, "left": 490, "width": 600, "height": 40}
 
-    # Первичное захват экрана и подготовка изображения
-    img = np.array(sct.grab(monitor))
+# Функция для поиска динозавра на экране
+def find_dino(img, template):
+    result = cv.matchTemplate(img, template, cv.TM_CCOEFF_NORMED)
+    min_val, max_val, min_loc, max_loc = cv.minMaxLoc(result)
+    return max_loc
+
+
+def process_frame(img):
     img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-    _, _, t_min_loc, _ = cv.minMaxLoc(cv.matchTemplate(img, dino_img, cv.TM_SQDIFF_NORMED))
+    _, img = cv.threshold(img, 127, 255, cv.THRESH_BINARY_INV)
 
+    enemy = img[:, int(img.shape[1] * 0.3):]
+    enemy = enemy[:int(enemy.shape[0] * 0.855), :]
+
+    kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5))
+    enemy = cv.morphologyEx(enemy, cv.MORPH_CLOSE, kernel)
+
+    return enemy
+
+
+def detect_and_act(contours, start, dino_pos):
+    for contour in contours:
+        x, y, w, h = cv.boundingRect(contour)
+
+        agr = 45
+        elapsed_time = time() - start
+        if elapsed_time < 50:
+            agr = 16
+        if elapsed_time > 330:
+            elapsed_time = 330
+
+        if x < agr:
+            sleeper = (w) * 20 / (1000 + elapsed_time * 40)
+            if y + h - dino_pos[1] - 20 > 0:
+                if y - dino_pos[1] >= -10:
+                    sleeper += 0.11
+                    inp.press("up")
+                    sleep(sleeper / 4.6)
+                    inp.keyDown("down")
+                    sleep(0.03)
+                    inp.keyUp("down")
+            else:
+                inp.keyDown("down")
+                sleep(abs(sleeper - 0.04))
+                inp.keyUp("down")
+
+
+with mss() as sct:
+    monitor = {"top": 315, "left": 400, "width": 600, "height": 43}
     start = time()
-    timer = 0
+
+    # Определение положения динозавра
+    img = np.array(sct.grab(monitor))
+    gray_img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
+    dino_pos = find_dino(gray_img, dino_img)
+
     while True:
         frame_start_time = time()
 
-        # Захват экрана и преобразование изображения
-        img = np.array(sct.grab(monitor))
-        img = cv.cvtColor(img, cv.COLOR_RGB2GRAY)
-        _, img = cv.threshold(img, 127, 255, cv.THRESH_BINARY_INV)
+        try:
+            img = np.array(sct.grab(monitor))
+            enemy = process_frame(img)
 
-        # Обработка области с врагами
-        enemy = img[:, int(img.shape[1] * 0.3):]
-        enemy = enemy[:int(enemy.shape[0] * 0.855), :]
+            contours, _ = cv.findContours(enemy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+            detect_and_act(contours, start, dino_pos)
 
-        # Применение морфологического закрытия
-        kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (7, 7))
-        enemy = cv.morphologyEx(enemy, cv.MORPH_CLOSE, kernel)
+            cv.imshow('Image', enemy)
 
-        # Поиск контуров
-        contours, _ = cv.findContours(enemy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+            if cv.waitKey(1) == ord("q"):
+                break
 
-        for contour in contours:
-            x, y, w, h = cv.boundingRect(contour)
+            frame_end_time = time()
+            elapsed_time = frame_end_time - frame_start_time
+            if elapsed_time < frame_duration:
+                sleep(frame_duration - elapsed_time)
 
-            agr = 45
-            if time() - start < 50:
-                agr = 17
-            timer = time() - start
-            if timer > 330:
-                timer = 330
-
-            if x < agr:
-                sleeper = (w) * 20 / (1000 + timer * 40)
-                if y + h - t_min_loc[1] - 20 > 0:
-                    if y - t_min_loc[1] >= -10:
-                        sleeper += 0.1
-                        inp.press("up")
-                        sleep(sleeper / 4.6)
-                        inp.keyDown("down")
-                        sleep(0.02)
-                        inp.keyUp("down")
-                else:
-                    inp.keyDown("down")
-                    sleep(abs(sleeper - 0.04))
-                    inp.keyUp("down")
-
-        frame_end_time = time()
-        elapsed_time = frame_end_time - frame_start_time
-        if elapsed_time < frame_duration:
-            sleep(frame_duration - elapsed_time)
-
-        if cv.waitKey(1) == ord("q"):
+        except Exception as e:
+            print(f"An error occurred: {e}")
             break
-
-        cv.imshow('Image', enemy)
 
 cv.destroyAllWindows()
