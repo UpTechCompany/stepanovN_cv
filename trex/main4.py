@@ -9,7 +9,7 @@ dino_img = cv.imread("t-rex.png", cv.IMREAD_GRAYSCALE)
 sleep(3)
 
 # Параметры захвата экрана
-frame_rate = 60
+frame_rate = 120
 frame_duration = 1.0 / frame_rate
 
 
@@ -25,7 +25,7 @@ def process_frame(img):
     _, img = cv.threshold(img, 127, 255, cv.THRESH_BINARY_INV)
 
     enemy = img[:, int(img.shape[1] * 0.3):]
-    enemy = enemy[:int(enemy.shape[0] * 0.855), :]
+    enemy = enemy[:int(enemy.shape[0] * 0.845), :]
 
     kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, (5, 5))
     enemy = cv.morphologyEx(enemy, cv.MORPH_CLOSE, kernel)
@@ -37,7 +37,7 @@ def detect_and_act(contours, start, dino_pos):
     for contour in contours:
         x, y, w, h = cv.boundingRect(contour)
 
-        agr = 45
+        agr = 40
         elapsed_time = time() - start
         if elapsed_time < 50:
             agr = 16
@@ -45,14 +45,14 @@ def detect_and_act(contours, start, dino_pos):
             elapsed_time = 330
 
         if x < agr:
-            sleeper = (w) * 20 / (1000 + elapsed_time * 40)
+            sleeper = (w) * 21 / (1000 + elapsed_time * 40)
             if y + h - dino_pos[1] - 20 > 0:
                 if y - dino_pos[1] >= -10:
-                    sleeper += 0.11
+                    sleeper += 0.1
                     inp.press("up")
-                    sleep(sleeper / 4.6)
+                    sleep(sleeper / 4.7)
                     inp.keyDown("down")
-                    sleep(0.03)
+                    sleep(0.02)
                     inp.keyUp("down")
             else:
                 inp.keyDown("down")
@@ -61,7 +61,7 @@ def detect_and_act(contours, start, dino_pos):
 
 
 with mss() as sct:
-    monitor = {"top": 315, "left": 400, "width": 600, "height": 43}
+    monitor = {"top": 310, "left": 400, "width": 600, "height": 43}
     start = time()
 
     # Определение положения динозавра
